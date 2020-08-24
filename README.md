@@ -100,12 +100,25 @@ $ vault secrets enable --plugin-name='tencentcloudsecrets' --path="tencentcloud"
 
 ### Tests
 
-This plugin has integration tests. 
+This plugin has integration tests and acceptance tests.
 
-Run the integration tests:
+The integration tests only test offline without real network API request.
+
+The acceptance tests will send real API requests to TencentCloud.
+
+#### Run the integration tests:
 
 ```sh
 $ make test
+```
+
+#### Run the acceptance tests:
+
+```sh
+export TENCENTCLOUD_SECRET_ID=AKID12l4j5ljqatgaljgalg
+export TENCENTCLOUD_SECRET_KEY=alkfj23lkraljq5lj532lr32l4
+export TENCENTCLOUD_ARN=qcs::cam::uin/12345678:roleName/test
+make test-acc 
 ```
 
 ## Other Docs
