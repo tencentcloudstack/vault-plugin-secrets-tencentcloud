@@ -114,10 +114,18 @@ $ make test
 
 #### Run the acceptance tests:
 
+- provide your credentials via `TENCENTCLOUD_SECRET_ID` and `TENCENTCLOUD_SECRET_KEY` environment variables
+and set your CAM role arn via `TENCENTCLOUD_ARN` environment variables
+
 ```sh
 export TENCENTCLOUD_SECRET_ID=AKID12l4j5ljqatgaljgalg
 export TENCENTCLOUD_SECRET_KEY=alkfj23lkraljq5lj532lr32l4
 export TENCENTCLOUD_ARN=qcs::cam::uin/12345678:roleName/test
+```
+
+- Run acceptance tests
+
+```sh
 make test-acc 
 ```
 
