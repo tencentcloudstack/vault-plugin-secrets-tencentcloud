@@ -19,7 +19,7 @@ const (
 )
 
 const (
-	userCredential        = "user"
+	userCredential        = "cam_user"
 	assumedRoleCredential = "assumed_role"
 )
 
