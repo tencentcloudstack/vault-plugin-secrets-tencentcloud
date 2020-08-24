@@ -3,6 +3,7 @@ package sdk
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/hashicorp/vault-plugin-secrets-tencentcloud/sdk/custom"
@@ -19,17 +20,13 @@ type Client struct {
 	stsClient    *sts.Client
 }
 
-func NewClient(accessKey, secretKey, region string, debug bool) (*Client, error) {
+func NewClient(accessKey, secretKey, region string, transport http.RoundTripper) (*Client, error) {
 	credential := common.NewCredential(accessKey, secretKey)
 	cpf := profile.NewClientProfile()
 
 	customClient, err := custom.NewClient(credential, region, cpf)
 	if err != nil {
 		return nil, err
-	}
-
-	transport := &LogRoundTripper{
-		debug: debug,
 	}
 
 	customClient.WithHttpTransport(transport)

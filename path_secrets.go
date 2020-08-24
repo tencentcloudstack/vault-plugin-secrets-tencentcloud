@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/hashicorp/vault-plugin-secrets-tencentcloud/sdk"
 	"github.com/hashicorp/vault/sdk/framework"
@@ -45,9 +46,15 @@ func (b *backend) operationRenew(ctx context.Context, req *logical.Request, _ *f
 		}
 
 		accessKey := internalData["access_key"].(string)
-		uin := internalData["uin"].(uint64)
 
-		client, err := sdk.NewClient(cred.AccessKey, cred.SecretKey, cred.Region, b.debug)
+		var uin uint64
+		if raw, ok := internalData["uin"].(uint64); ok {
+			uin = raw
+		} else {
+			uin = uint64(internalData["uin"].(float64))
+		}
+
+		client, err := sdk.NewClient(cred.AccessKey, cred.SecretKey, cred.Region, b.transport)
 		if err != nil {
 			return nil, err
 		}
@@ -61,10 +68,21 @@ func (b *backend) operationRenew(ctx context.Context, req *logical.Request, _ *f
 			return nil, err
 		}
 
+		internalData["access_key"] = accessKey
+
 		resp := b.Secret(secretType).Response(map[string]interface{}{
 			"access_key": accessKey,
 			"secret_key": secretKey,
 		}, internalData)
+
+		var ttl uint64
+		if raw, ok := internalData["ttl"].(uint64); ok {
+			ttl = raw
+		} else {
+			ttl = uint64(internalData["ttl"].(float64))
+		}
+
+		resp.Secret.TTL = time.Duration(ttl) * time.Second
 
 		return resp, nil
 
@@ -105,7 +123,7 @@ func (b *backend) operationRevoke(ctx context.Context, req *logical.Request, _ *
 			policyId = uint64(internalData["policy_id"].(float64))
 		}
 
-		client, err := sdk.NewClient(cred.AccessKey, cred.SecretKey, cred.Region, b.debug)
+		client, err := sdk.NewClient(cred.AccessKey, cred.SecretKey, cred.Region, b.transport)
 		if err != nil {
 			return nil, err
 		}

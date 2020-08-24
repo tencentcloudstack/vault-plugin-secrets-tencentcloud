@@ -10,16 +10,16 @@ import (
 	"time"
 )
 
-const ReqClient = "vault-v0.1.0"
+const reqClient = "vault-v0.1.0"
 
 type LogRoundTripper struct {
-	debug bool
+	Debug bool
 }
 
 func (l *LogRoundTripper) RoundTrip(request *http.Request) (response *http.Response, err error) {
 	var inBytes, outBytes []byte
 
-	if l.debug {
+	if l.Debug {
 		var start = time.Now()
 
 		defer func() { l.log(inBytes, outBytes, err, start) }()
@@ -31,7 +31,7 @@ func (l *LogRoundTripper) RoundTrip(request *http.Request) (response *http.Respo
 	}
 
 	headName := "X-TC-Action"
-	request.Header.Set("X-TC-RequestClient", ReqClient)
+	request.Header.Set("X-TC-RequestClient", reqClient)
 	inBytes = []byte(fmt.Sprintf("%s, request: ", request.Header[headName]))
 
 	requestBody, err := ioutil.ReadAll(bodyReader)

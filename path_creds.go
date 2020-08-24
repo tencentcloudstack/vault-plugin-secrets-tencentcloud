@@ -54,7 +54,7 @@ func (b *backend) operationCredsRead(ctx context.Context, req *logical.Request, 
 		return nil, errors.New("unable to create secret because no credentials are configured")
 	}
 
-	client, err := sdk.NewClient(cred.AccessKey, cred.SecretKey, cred.Region, b.debug)
+	client, err := sdk.NewClient(cred.AccessKey, cred.SecretKey, cred.Region, b.transport)
 	if err != nil {
 		return nil, err
 	}
@@ -130,6 +130,7 @@ func (b *backend) operationCredsRead(ctx context.Context, req *logical.Request, 
 			"uid":             uid,
 			"policy_id":       policyId,
 			"access_key":      accessKey,
+			"ttl":             uint64(role.TTL / time.Second),
 		})
 
 		resp.Secret.TTL = role.TTL

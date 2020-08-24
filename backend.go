@@ -2,9 +2,11 @@ package vault_plugin_secrets_tencentcloud
 
 import (
 	"context"
+	"net/http"
 	"os"
 	"strings"
 
+	"github.com/hashicorp/vault-plugin-secrets-tencentcloud/sdk"
 	"github.com/hashicorp/vault/sdk/framework"
 	"github.com/hashicorp/vault/sdk/logical"
 )
@@ -12,7 +14,7 @@ import (
 type backend struct {
 	*framework.Backend
 
-	debug bool
+	transport http.RoundTripper
 }
 
 func Factory(ctx context.Context, conf *logical.BackendConfig) (logical.Backend, error) {
@@ -23,18 +25,22 @@ func Factory(ctx context.Context, conf *logical.BackendConfig) (logical.Backend,
 		debug = env == "trace" || env == "debug"
 	}
 
-	b := newBackend(debug)
+	b := newBackend(&sdk.LogRoundTripper{
+		Debug: debug,
+	})
+
 	if err := b.Setup(ctx, conf); err != nil {
 		return nil, err
 	}
+
 	return b, nil
 }
 
 // newBackend allows us to pass in the sdkConfig for testing purposes.
-func newBackend(debug bool) logical.Backend {
+func newBackend(transport http.RoundTripper) logical.Backend {
 	var b backend
 
-	b.debug = debug
+	b.transport = transport
 
 	b.Backend = &framework.Backend{
 		Help: strings.TrimSpace(backendHelp),

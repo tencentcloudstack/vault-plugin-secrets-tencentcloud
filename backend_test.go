@@ -2,30 +2,15 @@ package vault_plugin_secrets_tencentcloud
 
 import (
 	"context"
-	"os"
 	"testing"
 	"time"
 
 	"github.com/hashicorp/vault/sdk/logical"
 )
 
-func newIntegrationTestEnv(t *testing.T) (*testEnv, error) {
-	id := os.Getenv("TENCENTCLOUD_SECRET_ID")
-	if id == "" {
-		t.Fatal("miss TENCENTCLOUD_SECRET_ID")
-	}
+func newIntegrationTestEnv() (*testEnv, error) {
+	b := newBackend(new(fakeTransport))
 
-	key := os.Getenv("TENCENTCLOUD_SECRET_KEY")
-	if key == "" {
-		t.Fatal("miss TENCENTCLOUD_SECRET_KEY")
-	}
-
-	arn := os.Getenv("TENCENTCLOUD_ARN")
-	if arn == "" {
-		t.Fatal("miss TENCENTCLOUD_ARN")
-	}
-
-	b := newBackend(true)
 	conf := &logical.BackendConfig{
 		System: &logical.StaticSystemView{
 			DefaultLeaseTTLVal: 7200 * time.Second,
@@ -37,19 +22,19 @@ func newIntegrationTestEnv(t *testing.T) (*testEnv, error) {
 	}
 
 	return &testEnv{
-		AccessKey: id,
-		SecretKey: key,
-		RoleARN:   arn,
+		AccessKey: "AKID11223344556677889900",
+		SecretKey: "alkjfaj12lj434lqj25qlajga",
+		RoleARN:   "qcs::cam::uin/12345678:roleName/test",
 		Backend:   b,
 		Context:   context.Background(),
 		Storage:   &logical.InmemStorage{},
 	}, nil
 }
 
-func TestConfig(t *testing.T) {
+func TestIntegrationConfig(t *testing.T) {
 	t.Parallel()
 
-	integrationTestEnv, err := newIntegrationTestEnv(t)
+	integrationTestEnv, err := newIntegrationTestEnv()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,10 +47,10 @@ func TestConfig(t *testing.T) {
 	t.Run("read empty config", integrationTestEnv.ReadEmptyConfig)
 }
 
-func TestDynamicPolicyBasedCreds(t *testing.T) {
+func TestIntegrationCamUserBasedCreds(t *testing.T) {
 	t.Parallel()
 
-	integrationTestEnv, err := newIntegrationTestEnv(t)
+	integrationTestEnv, err := newIntegrationTestEnv()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,10 +69,10 @@ func TestDynamicPolicyBasedCreds(t *testing.T) {
 	t.Run("revoke policy-based creds", integrationTestEnv.RevokePolicyBasedCreds)
 }
 
-func TestDynamicRoleBasedCreds(t *testing.T) {
+func TestIntegrationAssumedRoleBasedCreds(t *testing.T) {
 	t.Parallel()
 
-	integrationTestEnv, err := newIntegrationTestEnv(t)
+	integrationTestEnv, err := newIntegrationTestEnv()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,10 +91,10 @@ func TestDynamicRoleBasedCreds(t *testing.T) {
 	t.Run("revoke arn-based creds", integrationTestEnv.RevokeARNBasedCreds)
 }
 
-func TestMultiRoles(t *testing.T) {
+func TestIntegrationAssumedMultiRoles(t *testing.T) {
 	t.Parallel()
 
-	integrationTestEnv, err := newIntegrationTestEnv(t)
+	integrationTestEnv, err := newIntegrationTestEnv()
 	if err != nil {
 		t.Fatal(err)
 	}
