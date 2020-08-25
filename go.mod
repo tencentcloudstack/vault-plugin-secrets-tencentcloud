@@ -25,6 +25,8 @@ require (
 	github.com/oklog/run v1.1.0 // indirect
 	github.com/pierrec/lz4 v2.5.2+incompatible // indirect
 	github.com/tencentcloud/tencentcloud-sdk-go v3.0.233+incompatible
+	go.uber.org/atomic v1.6.0 // indirect
+	go.uber.org/ratelimit v0.1.0
 	golang.org/x/crypto v0.0.0-20200728195943-123391ffb6de // indirect
 	golang.org/x/net v0.0.0-20200813134508-3edf25e44fcc // indirect
 	golang.org/x/sys v0.0.0-20200820212457-1fb795427249 // indirect

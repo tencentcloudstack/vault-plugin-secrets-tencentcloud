@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/vault-plugin-secrets-tencentcloud/sdk/custom"
+	"github.com/hashicorp/vault-plugin-secrets-tencentcloud/sdk/ratelimit"
 	cam "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cam/v20190116"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	sdkError "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/errors"
@@ -58,6 +59,8 @@ func (c *Client) AssumeRole(name, roleArn string, ttl time.Duration) (cred *sts.
 	request.RoleArn = &roleArn
 	request.DurationSeconds = common.Uint64Ptr(uint64(ttl / time.Second))
 
+	ratelimit.Take(request.GetService())
+
 	resp, err := c.stsClient.AssumeRole(request)
 	if err != nil {
 		return nil, time.Time{}, fmt.Errorf("assume role failed: %w", err)
@@ -77,6 +80,8 @@ func (c *Client) AddUser(name string) (uin, uid uint64, accessKey, secretKey str
 	request.ConsoleLogin = common.Uint64Ptr(0)
 	request.UseApi = common.Uint64Ptr(1)
 
+	ratelimit.Take(request.GetService())
+
 	resp, err := c.camClient.AddUser(request)
 	if err != nil {
 		return 0, 0, "", "", fmt.Errorf("create user failed: %w", err)
@@ -95,6 +100,8 @@ func (c *Client) CreatePolicy(policyName string, policy *Policy) (policyId uint6
 	request.PolicyName = &policyName
 	request.PolicyDocument = common.StringPtr(string(policyJson))
 
+	ratelimit.Take(request.GetService())
+
 	resp, err := c.camClient.CreatePolicy(request)
 	if err != nil {
 		return 0, fmt.Errorf("create policy failed: %w", err)
@@ -109,6 +116,8 @@ func (c *Client) DeletePolicy(policyIds []uint64) error {
 	for _, id := range policyIds {
 		request.PolicyId = append(request.PolicyId, common.Uint64Ptr(id))
 	}
+
+	ratelimit.Take(request.GetService())
 
 	if _, err := c.camClient.DeletePolicy(request); err != nil {
 		if sdkErr, ok := err.(*sdkError.TencentCloudSDKError); ok {
@@ -132,6 +141,8 @@ func (c *Client) DeleteUser(name string) error {
 	request.Name = &name
 	request.Force = common.Uint64Ptr(1)
 
+	ratelimit.Take(request.GetService())
+
 	if _, err := c.camClient.DeleteUser(request); err != nil {
 		if sdkErr, ok := err.(*sdkError.TencentCloudSDKError); ok {
 			if sdkErr.Code == "ResourceNotFound.UserNotExist" {
@@ -150,6 +161,8 @@ func (c *Client) AttachUserPolicy(policyId, uin uint64) error {
 	request.PolicyId = &policyId
 	request.AttachUin = &uin
 
+	ratelimit.Take(request.GetService())
+
 	if _, err := c.camClient.AttachUserPolicy(request); err != nil {
 		return err
 	}
@@ -162,6 +175,8 @@ func (c *Client) DeleteAccessKey(uin uint64, accessKey string) error {
 	request.TargetUin = &uin
 	request.AccessKeyId = &accessKey
 
+	ratelimit.Take(request.GetService())
+
 	if _, err := c.customClient.DeleteAccessKey(request); err != nil {
 		return err
 	}
@@ -172,6 +187,8 @@ func (c *Client) DeleteAccessKey(uin uint64, accessKey string) error {
 func (c *Client) CreateAccessKey(uin uint64) (accessKey, secretKey string, err error) {
 	request := custom.NewCreateAccessKeyRequest()
 	request.TargetUin = &uin
+
+	ratelimit.Take(request.GetService())
 
 	resp, err := c.customClient.CreateAccessKey(request)
 	if err != nil {
