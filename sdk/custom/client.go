@@ -26,31 +26,6 @@ func NewClient(credential *common.Credential, region string, clientProfile *prof
 	return
 }
 
-func NewAssumeRoleRequest() (request *AssumeRoleRequest) {
-	request = &AssumeRoleRequest{
-		BaseRequest: &tchttp.BaseRequest{},
-	}
-	request.Init().WithApiInfo(StsApiService, StsApiVersion, "AssumeRole")
-	return
-}
-
-func NewAssumeRoleResponse() (response *AssumeRoleResponse) {
-	response = &AssumeRoleResponse{
-		BaseResponse: &tchttp.BaseResponse{},
-	}
-	return
-}
-
-// 申请扮演角色
-func (c *Client) AssumeRole(request *AssumeRoleRequest) (response *AssumeRoleResponse, err error) {
-	if request == nil {
-		request = NewAssumeRoleRequest()
-	}
-	response = NewAssumeRoleResponse()
-	err = c.Send(request, response)
-	return
-}
-
 func NewDeleteAccessKeyRequest() (request *DeleteAccessKeyRequest) {
 	request = &DeleteAccessKeyRequest{
 		BaseRequest: &tchttp.BaseRequest{},
