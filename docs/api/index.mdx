@@ -1,0 +1,169 @@
+---
+layout: api
+page_title: TencentCloud - Secrets Engines - HTTP API
+sidebar_title: TencentCloud
+description: This is the API documentation for the Vault TencentCloud secrets engine.
+---
+
+# TencentCloud Secrets Engine (API)
+
+This is the API documentation for the Vault TencentCloud secrets engine. For general
+information about the usage and operation of the TencentCloud secrets engine, please see
+the [Vault TencentCloud documentation](/docs/secrets/tencentcloud).
+
+This documentation assumes the TencentCloud secrets engine is enabled at the `/tencentcloud` path
+in Vault. Since it is possible to enable secrets engines at any location, please
+update your API calls accordingly.
+
+## Config management
+
+This endpoint configures the CAM credentials to communicate with TencentCloud. TencentCloud
+will use credentials in the following order:
+
+| Method | Path               |
+| :----- | :----------------- |
+| `POST` | `/tencentcloud/config` |
+| `GET`  | `/tencentcloud/config` |
+
+### Parameters
+
+- `access_key` (string, required) - The ID of an access key with appropriate policies.
+- `secret_key` (string, required) - The secret for that key.
+- `region` (string, required) - The region will be used.
+
+### Sample Post Request
+
+```sh
+$ curl \
+    --header "X-Vault-Token: ..." \
+    --request POST \
+    --data @payload.json \
+    http://127.0.0.1:8200/v1/tencentcloud/config
+```
+
+### Sample Post Payload
+
+```json
+{
+  "access_key": "2a6a141fabb55d53d6e785a1eee43c3c",
+  "secret_key": "AKIDavmzwcTB3f09G6OPow1qOffmfPt82YR3",
+  "region": "ap-guangzhou"
+}
+```
+
+If success, will receive an HTTP 204 No Content response.
+
+## Role management
+
+The `role` endpoint configures how Vault will generate credentials for users of each role.
+
+### Parameters
+
+- `name` (string, required) – Specifies the name of the role to generate credentials against. This is part of the request URL.
+- `credential_type` (string, required) - Specifies the role credential type, for now support `cam_user` and `assumed_role`.
+- `role_arn` (string, optional) - The resource description of the role. See [Vault TencentCloud documentation](/docs/secrets/tencentcloud).
+- `policies` (string, optional) - The policy description. See [Vault TencentCloud documentation](/docs/secrets/tencentcloud).
+- `ttl` (int, optional) - The duration in seconds after which the issued token should expire. Defaults to 7200.
+
+| Method   | Path                        |
+| :------- | :-------------------------- |
+| `GET`    | `/tencentcloud/role`            |
+| `POST`   | `/tencentcloud/roles/:role_name` |
+| `GET`    | `/tencentcloud/roles/:role_name` |
+| `DELETE` | `/tencentcloud/roles/:role_name` |
+
+### Sample Post Request
+
+```sh
+$ curl \
+    --header "X-Vault-Token: ..." \
+    --request POST \
+    --data @payload.json \
+    http://127.0.0.1:8200/v1/tencentcloud/roles/dev-role
+```
+
+### Sample Post Payload Using assumed_role
+
+```json
+{
+    "credential_type":"assumed_role",
+    "role_arn":"qcs::cam::uin/124:roleName/dev",
+    "ttl":"10000"
+}
+```
+
+### Sample Post Payload Using cam_user
+
+```json
+{"credential_type":"cam_user","policies":"{\"version\":\"2.0\",\"statement\":[{\"principal\":{\"qcs\":[\"qcs::cam::uin/1234:uin/1234\"]},\"effect\":\"allow\",\"action\":[\"name/cos:PutObject\"],\"resource\":[\"qcs::cos:bj:uid/1234:prefix//1234/bucketA/*\",\"qcs::cos:gz:uid/1234:prefix//1234/bucketB/object2\"],\"condition\":{\"ip_equal\":{\"qcs:ip\":\"10.10.10.10/24\"}}},{\"principal\":{\"qcs\":[\"qcs::cam::uin/1234:uin/1234\"]},\"effect\":\"allow\",\"action\":\"name/cmqqueue:SendMessage\",\"resource\":\"*\"}]}","ttl":"100"}
+```
+
+### Sample List Roles Response
+
+Performing a `LIST` on the `/tencentcloud/roles` endpoint will list the names of all the roles Vault contains.
+
+```json
+["assumed_role", "cam_user"]
+```
+
+## Generate CAM Credentials
+
+This endpoint generates dynamic CAM credentials based on the named role. This
+role must be created before queried.
+
+| Method | Path                    |
+| :----- | :---------------------- |
+| `GET`  | `/tencentcloud/creds/:name` |
+
+### Parameters
+
+- `name` (string, required) – Specifies the name of the role to generate credentials against. This is part of the request URL.
+
+### Sample Request
+
+```sh
+$ curl \
+    --header "X-Vault-Token: ..." \
+    http://127.0.0.1:8200/v1/tencentcloud/creds/dev
+```
+
+### Sample Response for Roles Using assumed_role
+
+```json
+{
+    "request_id":"5cceb667-c588-a8ee-7c97-2345sa",
+    "lease_id":"tencentcloud/creds/ar/af23rafafzg",
+    "renewable":false,
+    "lease_duration":9999,
+    "data":{
+        "access_key":"AKIDDPGgvy6Zo_8yik0asfag46agagag08FbJlennaDCBUVQtC4-xsl6k",
+        "expiration":"2020-09-03T11:59:43Z",
+        "name":"vault-token-dev-2020-09-03-q2bw05t1",
+        "secret_key":"jWlBP7fa32fab43awghq7CV5nzwSdrPFsYmFWNefc=",
+        "secret_token":"6DxUm30asg4awt6264atasgaq2Fbu2TlZ9af3TUm1Z-8g1uCC4r_PTJ8oVBwFD2stTWQX8GF0gDnfBqb2hvjtcMw4WoP80909qHlf5VEs4iIjlnihq6WmLooY95pJAlNil3Oih_c-WIP21ADQ8oNDCSHKBjo0cc5gEJONYDphRo8GqjCPKT8SgbsSSwdsMOaZuJ8FLo2g7t1ONtI2jTQyetz7SSd2cXm0psXtopx4WhSdNtpLJeAfiEkKVz6naVEg-Tl3IGVGpqrZwlxaiQGiLY-0am40M4FIcdPIeCjO6Go9uvFEohyRntsn3p1TW001Fru9GYIa2XkEQty6oUbLkLCw5Z_FdS2jCeTWa0WSG_GxPjIGJMUsAzoTJU-siyhtCHvK1fcVSw"
+    },
+    "wrap_info":null,
+    "warnings":null,
+    "auth":null
+}
+```
+
+### Sample Response for Roles Using cam_user
+
+```json
+{
+    "request_id":"4a6fc814-b577-e02f-aae5-q2551atg5ag",
+    "lease_id":"tencentcloud/creds/user/LPXAfgAq345alkjsgsljg4qByU36Z",
+    "renewable":true,
+    "lease_duration":100,
+    "data":{
+        "access_key":"AKID8ApFNEmEMaskgq36t54z54z5bt1tcmYfW",
+        "expiration":"2020-09-03T17:16:11Z",
+        "name":"vault-token-dev-2020-09-03-oa3utm1g",
+        "secret_key":"jKEenfGl58urXOzUafq3tzbsnxy4hbbw4eBVYLrb5"
+    },
+    "wrap_info":null,
+    "warnings":null,
+    "auth":null
+}
+```

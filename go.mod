@@ -24,7 +24,7 @@ require (
 	github.com/mitchellh/mapstructure v1.3.3 // indirect
 	github.com/oklog/run v1.1.0 // indirect
 	github.com/pierrec/lz4 v2.5.2+incompatible // indirect
-	github.com/tencentcloud/tencentcloud-sdk-go v3.0.233+incompatible
+	github.com/tencentcloud/tencentcloud-sdk-go v1.0.4
 	go.uber.org/atomic v1.6.0 // indirect
 	go.uber.org/ratelimit v0.1.0
 	golang.org/x/crypto v0.0.0-20200728195943-123391ffb6de // indirect
