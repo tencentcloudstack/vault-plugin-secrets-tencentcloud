@@ -189,7 +189,7 @@ If any roles are using `RoleArn `, you need the following actions:
 ## API
 
 The Tencent Cloud secrets engine has a full HTTP API. Please see the
-[Tencent Cloud secrets engine API](/api/secret/tencent) for more
+[Tencent Cloud secrets engine API](https://github.com/tencentcloudstack/vault-plugin-secrets-tencentcloud/blob/master/docs/Tencent%20%20Cloud%20Secrets%20Engine%20(API).md) for more
 details.
 
 
