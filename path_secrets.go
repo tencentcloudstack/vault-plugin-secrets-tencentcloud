@@ -1,27 +1,29 @@
-package vault_plugin_secrets_tencentcloud
+package tencentcloud
 
 import (
 	"context"
 	"errors"
 	"fmt"
-	"time"
 
-	"github.com/hashicorp/vault-plugin-secrets-tencentcloud/sdk"
+	"github.com/hashicorp/go-multierror"
+	"github.com/hashicorp/vault-plugin-secrets-tencentcloud/clients"
 	"github.com/hashicorp/vault/sdk/framework"
+	"github.com/hashicorp/vault/sdk/helper/jsonutil"
 	"github.com/hashicorp/vault/sdk/logical"
+	"github.com/spf13/cast"
 )
 
 const secretType = "tencentcloud"
 
-func (b *backend) pathSecrets() *framework.Secret {
+func pathSecrets(b *backend) *framework.Secret {
 	return &framework.Secret{
 		Type: secretType,
 		Fields: map[string]*framework.FieldSchema{
-			"access_key": {
+			secretId: {
 				Type:        framework.TypeString,
-				Description: "Access Key",
+				Description: "Secret Id",
 			},
-			"secret_key": {
+			secretKey: {
 				Type:        framework.TypeString,
 				Description: "Secret Key",
 			},
@@ -31,114 +33,165 @@ func (b *backend) pathSecrets() *framework.Secret {
 	}
 }
 
-func (b *backend) operationRenew(ctx context.Context, req *logical.Request, _ *framework.FieldData) (*logical.Response, error) {
-	internalData := req.Secret.InternalData
+func (b *backend) operationRenew(ctx context.Context,
+	req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	roleTypeRaw, ok := req.Secret.InternalData["role_type"]
+	if !ok {
+		return nil, errors.New("role_type missing from secret")
+	}
+	nameOfRoleType, ok := roleTypeRaw.(string)
+	if !ok {
+		return nil, fmt.Errorf("unable to read role_type: %+v", roleTypeRaw)
+	}
+	rType, err := parseRoleType(nameOfRoleType)
+	if err != nil {
+		return nil, err
+	}
 
-	switch internalData["credential_type"] {
-	case userCredential:
-		cred, err := readCredential(ctx, req.Storage)
+	switch rType {
+
+	case roleTypeSTS:
+		// STS already has a lifetime, and we don'nameOfRoleType support renewing it.
+		return nil, nil
+
+	case roleTypeCAM:
+		roleName, err := getStringValue(req.Secret.InternalData, "role_name")
 		if err != nil {
 			return nil, err
 		}
 
-		if cred == nil {
-			return nil, errors.New("unable to renew secret key because no credentials are configured")
-		}
-
-		accessKey := internalData["access_key"].(string)
-
-		var uin uint64
-		if raw, ok := internalData["uin"].(uint64); ok {
-			uin = raw
-		} else {
-			uin = uint64(internalData["uin"].(float64))
-		}
-
-		client, err := sdk.NewClient(cred.AccessKey, cred.SecretKey, cred.Region, b.transport)
+		role, err := readRole(ctx, req.Storage, roleName)
 		if err != nil {
 			return nil, err
 		}
-
-		if err := client.DeleteAccessKey(uin, accessKey); err != nil {
-			return nil, err
+		if role == nil {
+			// The role has been deleted since the secret was issued or last renewed.
+			// The user's expectation is probably that the caller won'nameOfRoleType continue being
+			// able to perform renewals.
+			return nil, fmt.Errorf("role %s has been deleted so no further renewals are allowed", roleName)
 		}
 
-		accessKey, secretKey, err := client.CreateAccessKey(uin)
-		if err != nil {
-			return nil, err
+		resp := &logical.Response{Secret: req.Secret}
+		if role.TTL != 0 {
+			resp.Secret.TTL = role.TTL
 		}
-
-		internalData["access_key"] = accessKey
-
-		resp := b.Secret(secretType).Response(map[string]interface{}{
-			"access_key": accessKey,
-			"secret_key": secretKey,
-		}, internalData)
-
-		var ttl uint64
-		if raw, ok := internalData["ttl"].(uint64); ok {
-			ttl = raw
-		} else {
-			ttl = uint64(internalData["ttl"].(float64))
+		if role.MaxTTL != 0 {
+			resp.Secret.MaxTTL = role.MaxTTL
 		}
-
-		resp.Secret.TTL = time.Duration(ttl) * time.Second
-
 		return resp, nil
 
-	case assumedRoleCredential:
-		return nil, fmt.Errorf("when credential_type is %s, doesn't support renew", assumedRoleCredential)
-
 	default:
-		return nil, fmt.Errorf("unsupport credential_type %s", internalData["credential_type"])
+		return nil, fmt.Errorf("unrecognized role_type: %s", nameOfRoleType)
 	}
 }
 
-func (b *backend) operationRevoke(ctx context.Context, req *logical.Request, _ *framework.FieldData) (*logical.Response, error) {
-	internalData := req.Secret.InternalData
-
-	switch internalData["credential_type"] {
-	case assumedRoleCredential:
-		// assumed role type will revoke after ttl automatically
+func (b *backend) operationRevoke(ctx context.Context,
+	req *logical.Request, _ *framework.FieldData) (*logical.Response, error) {
+	roleTypeRaw, ok := req.Secret.InternalData["role_type"]
+	if !ok {
+		return nil, errors.New("role_type missing from secret")
+	}
+	nameOfRoleType, ok := roleTypeRaw.(string)
+	if !ok {
+		return nil, fmt.Errorf("unable to read role_type: %+v", roleTypeRaw)
+	}
+	rType, err := parseRoleType(nameOfRoleType)
+	if err != nil {
+		return nil, err
+	}
+	switch rType {
+	case roleTypeSTS:
 		return nil, nil
-
-	case userCredential:
-		cred, err := readCredential(ctx, req.Storage)
+	case roleTypeCAM:
+		creds, err := readCredConfig(ctx, req.Storage)
 		if err != nil {
 			return nil, err
 		}
-
-		if cred == nil {
-			return nil, errors.New("unable to delete secret key because no credentials are configured")
+		if creds == nil {
+			return nil, errors.New("unable to delete access key because no credentials are configured")
 		}
-
-		roleName := internalData["name"].(string)
-
-		var policyId uint64
-
-		// when run unit test, policy_id is uint64, however when run as plugin, policy_id is float64
-		if raw, ok := internalData["policy_id"].(uint64); ok {
-			policyId = raw
-		} else {
-			policyId = uint64(internalData["policy_id"].(float64))
-		}
-
-		client, err := sdk.NewClient(cred.AccessKey, cred.SecretKey, cred.Region, b.transport)
+		client, err := clients.NewCAMClient(b.profile, creds.SecretId, creds.SecretKey)
 		if err != nil {
 			return nil, err
 		}
-
-		if err := client.DeleteUser(roleName); err != nil {
+		userName, err := getStringValue(req.Secret.InternalData, "username")
+		if err != nil {
 			return nil, err
 		}
-
-		if err := client.DeletePolicy([]uint64{policyId}); err != nil {
+		uin, err := getStringValue(req.Secret.InternalData, "uin")
+		if err != nil {
 			return nil, err
 		}
-
-		return nil, nil
+		secret_id, err := getStringValue(req.Secret.InternalData, "secret_id")
+		if err != nil {
+			return nil, err
+		}
+		apiErrs := &multierror.Error{}
+		uinInt := uint64(cast.ToInt64(uin))
+		if err := client.DeleteAccessKey(&secret_id, &uinInt); err != nil {
+			apiErrs = multierror.Append(apiErrs, err)
+		}
+		inlinePolicies, err := getRemotePolicies(req.Secret.InternalData, "inline_policies")
+		if err != nil {
+			return nil, err
+		}
+		for _, inlinePolicy := range inlinePolicies {
+			if err := client.DetachUserPolicy(&(inlinePolicy.PolicyId), &uinInt); err != nil {
+				apiErrs = multierror.Append(apiErrs, err)
+			}
+			if err := client.DeletePolicy([]*uint64{&(inlinePolicy.PolicyId)}); err != nil {
+				apiErrs = multierror.Append(apiErrs, err)
+			}
+		}
+		remotePolicies, err := getRemotePolicies(req.Secret.InternalData, "remote_policies")
+		if err != nil {
+			return nil, err
+		}
+		for _, remotePolicy := range remotePolicies {
+			policyId, err := getPolicyIdByRemotePol(remotePolicy, client)
+			if err != nil {
+				return nil, err
+			}
+			if err := client.DetachUserPolicy(policyId, &uinInt); err != nil {
+				apiErrs = multierror.Append(apiErrs, err)
+			}
+		}
+		if err := client.DeleteUser(&userName); err != nil {
+			apiErrs = multierror.Append(apiErrs, err)
+		}
+		return nil, apiErrs.ErrorOrNil()
 
 	default:
-		return nil, fmt.Errorf("unsupport credential_type %s", internalData["credential_type"])
+		return nil, fmt.Errorf("unrecognized role_type: %s", nameOfRoleType)
 	}
+}
+
+func getStringValue(internalData map[string]interface{}, key string) (string, error) {
+	valueRaw, ok := internalData[key]
+	if !ok {
+		return "", fmt.Errorf("secret is missing %s internal data", key)
+	}
+	value, ok := valueRaw.(string)
+	if !ok {
+		return "", fmt.Errorf("secret is missing %s internal data", key)
+	}
+	return value, nil
+}
+
+func getRemotePolicies(internalData map[string]interface{}, key string) ([]*remotePolicy, error) {
+	valuesRaw, ok := internalData[key]
+	if !ok {
+		return nil, fmt.Errorf("secret is missing %s internal data", key)
+	}
+
+	valuesJSON, err := jsonutil.EncodeJSON(valuesRaw)
+	if err != nil {
+		return nil, fmt.Errorf("malformed %s internal data", key)
+	}
+
+	policies := []*remotePolicy{}
+	if err := jsonutil.DecodeJSON(valuesJSON, &policies); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal %s internal data as remotePolicy", key)
+	}
+	return policies, nil
 }

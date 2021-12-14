@@ -1,119 +1,154 @@
-package vault_plugin_secrets_tencentcloud
+package tencentcloud
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/hashicorp/vault/sdk/framework"
 	"github.com/hashicorp/vault/sdk/logical"
 )
 
-func (b *backend) pathConfig() *framework.Path {
+const (
+	configStoragePath = "config"
+	secretId          = "secret_id"
+	secretKey         = "secret_key"
+)
+
+type credConfig struct {
+	SecretId  string `json:"secret_id"`
+	SecretKey string `json:"secret_key"`
+}
+
+func pathConfig(b *backend) *framework.Path {
 	return &framework.Path{
 		Pattern: "config",
 		Fields: map[string]*framework.FieldSchema{
-			"access_key": {
+			secretId: {
 				Type:        framework.TypeString,
-				Required:    true,
-				Description: "Access key with appropriate permissions.",
+				Description: "Secret Id with appropriate permissions.",
 			},
-			"secret_key": {
+			secretKey: {
 				Type:        framework.TypeString,
-				Required:    true,
-				Description: "Secret key with appropriate permissions.",
-			},
-			"region": {
-				Type:        framework.TypeString,
-				Required:    true,
-				Description: "The region of role and Credentials",
+				Description: "Secret Key with appropriate permissions.",
 			},
 		},
 		Operations: map[logical.Operation]framework.OperationHandler{
+			logical.CreateOperation: &framework.PathOperation{
+				Callback: b.pathConfigWrite,
+			},
 			logical.UpdateOperation: &framework.PathOperation{
-				Callback: b.operationConfigUpdate,
+				Callback: b.pathConfigWrite,
 			},
 			logical.ReadOperation: &framework.PathOperation{
-				Callback: b.operationConfigRead,
+				Callback: b.pathConfigRead,
 			},
 			logical.DeleteOperation: &framework.PathOperation{
-				Callback: b.operationConfigDelete,
+				Callback: b.pathConfigDelete,
 			},
 		},
+		ExistenceCheck:  b.pathConfigExistenceCheck,
 		HelpSynopsis:    pathConfigRootHelpSyn,
 		HelpDescription: pathConfigRootHelpDesc,
 	}
 }
 
-func (b *backend) operationConfigUpdate(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
-	// Access keys and secrets are generated in pairs. You would never need
-	// to update one or the other alone, always both together.
-
-	entry, err := logical.StorageEntryJSON("config", credConfig{
-		AccessKey: data.Get("access_key").(string),
-		SecretKey: data.Get("secret_key").(string),
-		Region:    data.Get("region").(string),
-	})
+func (b *backend) pathConfigWrite(ctx context.Context,
+	req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	creds, err := readCredConfig(ctx, req.Storage)
 	if err != nil {
 		return nil, err
 	}
+	if creds == nil {
+		if req.Operation == logical.UpdateOperation {
+			return nil, fmt.Errorf("config not found during update operation")
+		}
+		creds = new(credConfig)
+	}
 
-	return nil, req.Storage.Put(ctx, entry)
-}
-
-func (b *backend) operationConfigRead(ctx context.Context, req *logical.Request, _ *framework.FieldData) (*logical.Response, error) {
-	cred, err := readCredential(ctx, req.Storage)
+	if secretIdIfc, ok := data.GetOk(secretId); ok {
+		creds.SecretId = secretIdIfc.(string)
+	}
+	if secretKeyIfc, ok := data.GetOk(secretKey); ok {
+		creds.SecretKey = secretKeyIfc.(string)
+	}
+	err = writeCredConfig(ctx, creds, req.Storage)
 	if err != nil {
-		return nil, err
-	}
-	if cred == nil {
-		return nil, nil
-	}
-
-	// "secret_key" is intentionally not returned by this endpoint
-	return &logical.Response{
-		Data: map[string]interface{}{
-			"access_key": cred.AccessKey,
-			"region":     cred.Region,
-		},
-	}, nil
-}
-
-func (b *backend) operationConfigDelete(ctx context.Context, req *logical.Request, _ *framework.FieldData) (*logical.Response, error) {
-	if err := req.Storage.Delete(ctx, "config"); err != nil {
 		return nil, err
 	}
 	return nil, nil
 }
 
-func readCredential(ctx context.Context, storage logical.Storage) (*credConfig, error) {
-	entry, err := storage.Get(ctx, "config")
+func (b *backend) pathConfigRead(ctx context.Context,
+	req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	creds, err := readCredConfig(ctx, req.Storage)
 	if err != nil {
 		return nil, err
 	}
+	if creds == nil {
+		return nil, nil
+	}
+	return &logical.Response{
+		Data: map[string]interface{}{
+			secretId:  creds.SecretId,
+			secretKey: creds.SecretKey,
+		},
+	}, nil
+}
 
+func (b *backend) pathConfigDelete(ctx context.Context,
+	req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	if err := req.Storage.Delete(ctx, configStoragePath); err != nil {
+		return nil, err
+	}
+	return nil, nil
+}
+
+func (b *backend) pathConfigExistenceCheck(ctx context.Context,
+	req *logical.Request, data *framework.FieldData) (bool, error) {
+	config, err := readCredConfig(ctx, req.Storage)
+	if err != nil {
+		return false, err
+	}
+
+	return config != nil, nil
+}
+
+func readCredConfig(ctx context.Context, storage logical.Storage) (*credConfig, error) {
+	entry, err := storage.Get(ctx, configStoragePath)
+	if err != nil {
+		return nil, err
+	}
 	if entry == nil {
 		return nil, nil
 	}
-
-	creds := new(credConfig)
-	if err := entry.DecodeJSON(creds); err != nil {
+	creds := &credConfig{}
+	if err = entry.DecodeJSON(creds); err != nil {
 		return nil, err
 	}
-
 	return creds, nil
 }
 
-type credConfig struct {
-	AccessKey string `json:"access_key"`
-	SecretKey string `json:"secret_key"`
-	Region    string `json:"region"`
+func writeCredConfig(ctx context.Context, config *credConfig, s logical.Storage) error {
+	entry, err := logical.StorageEntryJSON(configStoragePath, config)
+
+	if err != nil {
+		return err
+	}
+
+	err = s.Put(ctx, entry)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
-const pathConfigRootHelpSyn = `
-Configure the access key and secret to use for Tencentcloud CAM and STS.
-`
-
-const pathConfigRootHelpDesc = `
-Before doing anything, the TencentCloud backend needs credentials that are able
-to manage CAM users and STS AssumeRole. 
-This endpoint is used to configure those credentials.
-`
+const (
+	pathConfigRootHelpSyn = `
+    Configure the secret id and key to use for CAM and STS calls 
+    `
+	pathConfigRootHelpDesc = `
+    Before doing anything, the TencentCloud backend needs credentials that are able
+    to manage CAM users, policies, and secret keys, and that can call STS AssumeRole. 
+    This endpoint is used to configure those credentials.
+    `
+)

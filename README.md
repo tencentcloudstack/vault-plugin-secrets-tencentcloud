@@ -14,7 +14,7 @@ Please note: We take Vault's security and our users' trust very seriously. If yo
 
 This is a [Vault plugin](https://www.vaultproject.io/docs/internals/plugins.html)
 and is meant to work with Vault. This guide assumes you have already installed Vault
-and have a basic understanding of how Vault works. Otherwise, first read this guide on 
+and have a basic understanding of how Vault works. Otherwise, first read this guide on
 how to [get started with Vault](https://www.vaultproject.io/intro/getting-started/install.html).
 
 If you are using Vault 11.0.1 or above, this plugin is packaged with Vault
@@ -26,19 +26,19 @@ $ vault secrets enable tencentcloud
 Success! Enabled the tencentcloud secrets engine at: tencentcloud/
  
 ```
- 
-If you are testing this plugin in an earlier version of Vault or 
+
+If you are testing this plugin in an earlier version of Vault or
 want to develop, see the next section.
- 
+
 ## Developing
- 
-If you wish to work on this plugin, you'll first need [Go](https://www.golang.org) 
+
+If you wish to work on this plugin, you'll first need [Go](https://www.golang.org)
 installed on your machine (whichever version is required by Vault).
- 
+
 Make sure Go is properly installed, including setting up a [GOPATH](https://golang.org/doc/code.html#GOPATH).
- 
-### Get Plugin 
-Clone this repository: 
+
+### Get Plugin
+Clone this repository:
 
 ```sh
 
@@ -115,12 +115,12 @@ $ make test
 #### Run the acceptance tests:
 
 - provide your credentials via `TENCENTCLOUD_SECRET_ID` and `TENCENTCLOUD_SECRET_KEY` environment variables
-and set your CAM role arn via `TENCENTCLOUD_ARN` environment variables
+  and set your CAM role arn via `TENCENTCLOUD_ARN` environment variables
 
 ```sh
 export TENCENTCLOUD_SECRET_ID=AKID12l4j5ljqatgaljgalg
 export TENCENTCLOUD_SECRET_KEY=alkfj23lkraljq5lj532lr32l4
-export TENCENTCLOUD_ARN=qcs::cam::uin/12345678:roleName/test
+export TENCENTCLOUD_ROLE_ARN=qcs::cam::uin/12345678:roleName/test
 ```
 
 - Run acceptance tests

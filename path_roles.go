@@ -1,40 +1,83 @@
-package vault_plugin_secrets_tencentcloud
+package tencentcloud
 
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
 
-	"github.com/hashicorp/vault-plugin-secrets-tencentcloud/sdk"
+	"github.com/hashicorp/go-uuid"
 	"github.com/hashicorp/vault/sdk/framework"
 	"github.com/hashicorp/vault/sdk/logical"
 )
 
 const (
-	allowPolicyVersion = "2.0"
-	maxTTL             = 43200 * time.Second
+	rolePath = "role/"
 )
-
 const (
-	userCredential        = "cam_user"
-	assumedRoleCredential = "assumed_role"
+	roleTypeUnknown roleType = iota
+	roleTypeCAM
+	roleTypeSTS
 )
 
-var credentialTypes = []interface{}{
-	userCredential,
-	assumedRoleCredential,
+type roleType int
+
+// String
+func (t roleType) String() string {
+	switch t {
+	case roleTypeCAM:
+		return "cam"
+	case roleTypeSTS:
+		return "sts"
+	}
+	return "unknown"
 }
 
-func (b *backend) pathListRoles() *framework.Path {
+type roleEntry struct {
+	RoleARN        string          `json:"role_arn"`
+	RemotePolicies []*remotePolicy `json:"remote_policies"`
+	InlinePolicies []*inlinePolicy `json:"inline_policies"`
+	TTL            time.Duration   `json:"ttl"`
+	MaxTTL         time.Duration   `json:"max_ttl"`
+}
+
+type inlinePolicy struct {
+	UUID           string                 `json:"hash"`
+	PolicyDocument map[string]interface{} `json:"policy_document"`
+}
+
+type remotePolicy struct {
+	PolicyName string `json:"policy_name"`
+	Scope      string `json:"scope"`
+	PolicyId   uint64 `json:"policy_id"`
+}
+
+// Type
+func (r *roleEntry) Type() roleType {
+	if r.RoleARN != "" {
+		return roleTypeSTS
+	}
+	return roleTypeCAM
+}
+
+func parseRoleType(nameOfRoleType string) (roleType, error) {
+	switch nameOfRoleType {
+	case "cam":
+		return roleTypeCAM, nil
+	case "sts":
+		return roleTypeSTS, nil
+	default:
+		return roleTypeUnknown, fmt.Errorf("received unknown role type: %s", nameOfRoleType)
+	}
+}
+
+func pathListRoles(b *backend) *framework.Path {
 	return &framework.Path{
-		Pattern: "roles/?$",
+		Pattern: "role/?$",
 		Operations: map[logical.Operation]framework.OperationHandler{
 			logical.ListOperation: &framework.PathOperation{
-				Callback: b.operationRolesList,
-				Summary:  pathListRolesHelpSyn,
+				Callback: b.pathRolesList,
 			},
 		},
 		HelpSynopsis:    pathListRolesHelpSyn,
@@ -42,58 +85,53 @@ func (b *backend) pathListRoles() *framework.Path {
 	}
 }
 
-func (b *backend) pathRole() *framework.Path {
+func pathRole(b *backend) *framework.Path {
 	return &framework.Path{
-		Pattern: "roles/" + framework.GenericNameRegex("name"),
+		Pattern: "role/" + framework.GenericNameRegex("name"),
 		Fields: map[string]*framework.FieldSchema{
-			"credential_type": {
-				Type:          framework.TypeString,
-				Required:      true,
-				Description:   fmt.Sprintf("The credential type, allow value contains: %q and %q", userCredential, assumedRoleCredential),
-				AllowedValues: credentialTypes,
-			},
 			"name": {
-				Type:        framework.TypeString,
-				Required:    true,
+				Type:        framework.TypeLowerCaseString,
 				Description: "The name of the role.",
 			},
 			"role_arn": {
 				Type: framework.TypeString,
-				Description: `The resource description of the role.
-Normal role example:
-qcs::cam::uin/12345678:role/4611686018427397919
-qcs::cam::uin/12345678:roleName/testRoleName
-
-Service role example:
-qcs::cam::uin/12345678:role/tencentcloudServiceRole/4611686018427397920
-qcs::cam::uin/12345678:role/tencentcloudServiceRoleName/testServiceRoleName
-
-Note: this only effective when credential_type is user.
-`,
+				Description: `ARN of the role to be assumed. If provided, inline_policies and
+remote_policies should be blank. At creation time, this role must have configured trusted actors,
+and the secret id and key that will be used to assume the role (in /config) must qualify
+as a trusted actor`,
 			},
-			"policies": {
+			"inline_policies": {
 				Type:        framework.TypeString,
-				Description: "JSON Policy description. The description rule can be found in https://intl.cloud.tencent.com/document/product/598/10604 and https://intl.cloud.tencent.com/document/product/598/10603",
+				Description: "JSON of policies to be dynamically applied to users of this role.",
+			},
+			"remote_policies": {
+				Type: framework.TypeStringSlice,
+				Description: `The name and type of each remote policy to be applied.
+Example: "policy_name:QcloudAFCFullAccess,scope:All".`,
 			},
 			"ttl": {
+				Type: framework.TypeDurationSecond,
+				Description: `Duration in seconds after which the issued token should expire. Defaults
+to 0, in which case the value will fallback to the system/mount defaults.`,
+			},
+			"max_ttl": {
 				Type:        framework.TypeDurationSecond,
-				Default:     7200,
-				Description: fmt.Sprintf("Duration in seconds after which the issued token should expire. Default is 7200, if credential_type is %q, the max is 43200.", assumedRoleCredential),
+				Description: "The maximum allowed lifetime of tokens issued using this role.",
 			},
 		},
-		ExistenceCheck: b.operationRoleExistenceCheck,
+		ExistenceCheck: b.pathRoleExistenceCheck,
 		Operations: map[logical.Operation]framework.OperationHandler{
 			logical.CreateOperation: &framework.PathOperation{
-				Callback: b.operationRoleCreateUpdate,
-			},
-			logical.ReadOperation: &framework.PathOperation{
-				Callback: b.operationRoleRead,
+				Callback: b.pathRoleWrite,
 			},
 			logical.UpdateOperation: &framework.PathOperation{
-				Callback: b.operationRoleCreateUpdate,
+				Callback: b.pathRoleWrite,
+			},
+			logical.ReadOperation: &framework.PathOperation{
+				Callback: b.pathRoleRead,
 			},
 			logical.DeleteOperation: &framework.PathOperation{
-				Callback: b.operationRoleDelete,
+				Callback: b.pathRoleDelete,
 			},
 		},
 		HelpSynopsis:    pathRolesHelpSyn,
@@ -101,174 +139,201 @@ Note: this only effective when credential_type is user.
 	}
 }
 
-func (b *backend) operationRoleExistenceCheck(ctx context.Context, req *logical.Request, data *framework.FieldData) (bool, error) {
+func (b *backend) pathRoleExistenceCheck(ctx context.Context,
+	req *logical.Request, data *framework.FieldData) (bool, error) {
 	entry, err := readRole(ctx, req.Storage, data.Get("name").(string))
 	if err != nil {
 		return false, err
 	}
-
 	return entry != nil, nil
 }
 
-func (b *backend) operationRoleCreateUpdate(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
-	roleName := data.Get("name").(string)
+func roleInlinePolicies(policyDocsStr string, role *roleEntry) (err error) {
+	var policyDocs []map[string]interface{}
+	if err = json.Unmarshal([]byte(policyDocsStr), &policyDocs); err != nil {
+		return err
+	}
+	role.InlinePolicies = make([]*inlinePolicy, len(policyDocs))
+	for i, policyDoc := range policyDocs {
+		uid, err := uuid.GenerateUUID()
+		if err != nil {
+			return err
+		}
+		uid = strings.Replace(uid, "-", "", -1)
+		role.InlinePolicies[i] = &inlinePolicy{
+			UUID:           uid,
+			PolicyDocument: policyDoc,
+		}
+	}
+	return nil
+}
 
+func roleRemotePolicies(remotePolicies []string, role *roleEntry) (err error) {
+	role.RemotePolicies = make([]*remotePolicy, len(remotePolicies))
+	for i, strPolicy := range remotePolicies {
+		policy := &remotePolicy{}
+		kvPairs := strings.Split(strPolicy, ",")
+		for _, kvPair := range kvPairs {
+			kvFields := strings.Split(kvPair, ":")
+			if len(kvFields) != 2 {
+				return fmt.Errorf("unable to recognize pair in %s", kvPair)
+			}
+			switch kvFields[0] {
+			case "policy_name":
+				policy.PolicyName = kvFields[1]
+			case "scope":
+				policy.Scope = kvFields[1]
+			default:
+				return fmt.Errorf("invalid key: %s", kvFields[0])
+			}
+		}
+		if policy.PolicyName == "" {
+			return fmt.Errorf("policy name is required in %s", strPolicy)
+		}
+		if policy.Scope == "" {
+			return fmt.Errorf("policy scope is required in %s", strPolicy)
+		}
+		role.RemotePolicies[i] = policy
+	}
+	return nil
+}
+
+func (b *backend) pathRoleWrite(ctx context.Context,
+	req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	roleName := data.Get("name").(string)
+	if roleName == "" {
+		return nil, fmt.Errorf("name is required")
+	}
 	role, err := readRole(ctx, req.Storage, roleName)
 	if err != nil {
 		return nil, err
 	}
-
 	if role == nil && req.Operation == logical.UpdateOperation {
 		return nil, fmt.Errorf("no role found to update for %s", roleName)
 	} else if role == nil {
-		role = new(roleEntry)
+		role = &roleEntry{}
 	}
-
-	role.CredentialType = data.Get("credential_type").(string)
-	role.Name = data.Get("name").(string)
-
-	switch role.CredentialType {
-	case assumedRoleCredential:
-		if raw, ok := data.GetOk("role_arn"); ok {
-			role.RoleARN = raw.(string)
-		} else {
-			return nil, fmt.Errorf("role_arn can not be empty when credential_type is %s", userCredential)
-		}
-
-	case userCredential:
-		if raw, ok := data.GetOk("policies"); ok {
-			if role.Policy == nil {
-				role.Policy = new(sdk.Policy)
-			}
-
-			if err := json.Unmarshal([]byte(raw.(string)), role.Policy); err != nil {
-				return nil, err
-			}
-		}
-
-		if role.Policy.Version != allowPolicyVersion {
-			return nil, fmt.Errorf("allow policy version is %s, not %s", allowPolicyVersion, role.Policy.Version)
-		}
-
-	default:
-		credTypes := make([]string, 0, 2)
-
-		for _, credType := range credentialTypes {
-			credTypes = append(credTypes, credType.(string))
-		}
-
-		allowCredTypes := strings.Join(credTypes, ", ")
-
-		return nil, fmt.Errorf("unknown credential_type %s, allow credential_type contains [%s]", role.CredentialType, allowCredTypes)
+	if raw, ok := data.GetOk("role_arn"); ok {
+		role.RoleARN = raw.(string)
 	}
-
-	role.TTL = time.Duration(data.Get("ttl").(int)) * time.Second
-
-	if role.TTL > maxTTL {
-		return nil, errors.New("allow max ttl is 43200")
+	if raw, ok := data.GetOk("inline_policies"); ok {
+		policyDocsStr := raw.(string)
+		err = roleInlinePolicies(policyDocsStr, role)
+		if err != nil {
+			return nil, err
+		}
 	}
-
-	entry, err := logical.StorageEntryJSON("roles/"+roleName, role)
+	if raw, ok := data.GetOk("remote_policies"); ok {
+		remotePolicies := raw.([]string)
+		err = roleRemotePolicies(remotePolicies, role)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if raw, ok := data.GetOk("ttl"); ok {
+		role.TTL = time.Duration(raw.(int)) * time.Second
+	}
+	if raw, ok := data.GetOk("max_ttl"); ok {
+		role.MaxTTL = time.Duration(raw.(int)) * time.Second
+	}
+	if role.MaxTTL > 0 && role.TTL > role.MaxTTL {
+		return nil, fmt.Errorf("ttl exceeds max_ttl")
+	}
+	if role.Type() == roleTypeSTS {
+		if len(role.RemotePolicies) > 0 {
+			return nil, fmt.Errorf("remote_policies must be blank when an arn is present")
+		}
+		if len(role.InlinePolicies) > 0 {
+			return nil, fmt.Errorf("inline_policies must be blank when an arn is present")
+		}
+	} else if len(role.InlinePolicies)+len(role.RemotePolicies) == 0 {
+		return nil, fmt.Errorf("must include an arn, or at least one of inline_policies or remote_policies")
+	}
+	err = saveRole(ctx, role, req.Storage, roleName)
 	if err != nil {
 		return nil, err
 	}
-
-	if err := req.Storage.Put(ctx, entry); err != nil {
-		return nil, err
+	resp := &logical.Response{}
+	if role.Type() == roleTypeSTS && (role.TTL > 0 || role.MaxTTL > 0) {
+		resp.AddWarning("role_arn is set so ttl and max_ttl will " +
+			"be ignored because they're not editable on STS tokens")
 	}
-
-	// Let's create a response that we're only going to return if there are warnings.
-	resp := new(logical.Response)
-
 	if role.TTL > b.System().MaxLeaseTTL() {
-		resp.AddWarning(fmt.Sprintf("ttl of %v exceeds the system max ttl of %v, the latter will be used during login", role.TTL, b.System().MaxLeaseTTL()))
+		resp.AddWarning(fmt.Sprintf("ttl of %d exceeds the system max ttl of %d, "+
+			"the latter will be used during login", role.TTL, b.System().MaxLeaseTTL()))
 	}
-
 	if len(resp.Warnings) > 0 {
 		return resp, nil
 	}
-
-	// No warnings, let's return a 204.
 	return nil, nil
 }
 
-func (b *backend) operationRoleRead(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+func (b *backend) pathRolesList(ctx context.Context,
+	req *logical.Request, _ *framework.FieldData) (*logical.Response, error) {
+	entries, err := req.Storage.List(ctx, rolePath)
+	if err != nil {
+		return nil, err
+	}
+	return logical.ListResponse(entries), nil
+}
+
+func (b *backend) pathRoleRead(ctx context.Context,
+	req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	roleName := data.Get("name").(string)
+	if roleName == "" {
+		return nil, fmt.Errorf("name is required")
+	}
 
 	role, err := readRole(ctx, req.Storage, roleName)
 	if err != nil {
 		return nil, err
 	}
-
 	if role == nil {
 		return nil, nil
 	}
-
-	var resp *logical.Response
-
-	switch role.CredentialType {
-	case assumedRoleCredential:
-		resp = &logical.Response{
-			Data: map[string]interface{}{
-				"name":            role.Name,
-				"credential_type": role.CredentialType,
-				"role_arn":        role.RoleARN,
-				"ttl":             role.TTL / time.Second,
-			},
-		}
-
-	case userCredential:
-		resp = &logical.Response{
-			Data: map[string]interface{}{
-				"name":            role.Name,
-				"credential_type": role.CredentialType,
-				"ttl":             role.TTL / time.Second,
-				"policies":        role.Policy,
-			},
-		}
-	}
-
-	return resp, nil
+	return &logical.Response{
+		Data: map[string]interface{}{
+			"role_arn":        role.RoleARN,
+			"remote_policies": role.RemotePolicies,
+			"inline_policies": role.InlinePolicies,
+			"ttl":             role.TTL / time.Second,
+			"max_ttl":         role.MaxTTL / time.Second,
+		},
+	}, nil
 }
 
-func (b *backend) operationRoleDelete(ctx context.Context, req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
-	return nil, req.Storage.Delete(ctx, "roles/"+data.Get("name").(string))
-}
-
-func (b *backend) operationRolesList(ctx context.Context, req *logical.Request, _ *framework.FieldData) (*logical.Response, error) {
-	entries, err := req.Storage.List(ctx, "roles/")
-	if err != nil {
+func (b *backend) pathRoleDelete(ctx context.Context,
+	req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
+	if err := req.Storage.Delete(ctx, rolePath+data.Get("name").(string)); err != nil {
 		return nil, err
 	}
+	return nil, nil
+}
 
-	return logical.ListResponse(entries), nil
+func saveRole(ctx context.Context, role *roleEntry, s logical.Storage, roleName string) error {
+	entry, err := logical.StorageEntryJSON(rolePath+roleName, role)
+	if err != nil {
+		return err
+	}
+	if err = s.Put(ctx, entry); err != nil {
+		return err
+	}
+	return nil
 }
 
 func readRole(ctx context.Context, s logical.Storage, roleName string) (*roleEntry, error) {
-	role, err := s.Get(ctx, "roles/"+roleName)
+	role, err := s.Get(ctx, rolePath+roleName)
 	if err != nil {
 		return nil, err
 	}
-
 	if role == nil {
 		return nil, nil
 	}
-
-	result := new(roleEntry)
-
+	result := &roleEntry{}
 	if err := role.DecodeJSON(result); err != nil {
 		return nil, err
 	}
-
 	return result, nil
-}
-
-type roleEntry struct {
-	Name           string        `json:"name"`
-	CredentialType string        `json:"credential_type"`
-	RoleARN        string        `json:"role_arn,omitempty"`
-	Policy         *sdk.Policy   `json:"policies,omitempty"`
-	TTL            time.Duration `json:"ttl"`
 }
 
 const pathListRolesHelpSyn = "List the existing roles in this backend."
@@ -276,23 +341,24 @@ const pathListRolesHelpSyn = "List the existing roles in this backend."
 const pathListRolesHelpDesc = "Roles will be listed by the role name."
 
 const pathRolesHelpSyn = `
-Read, write and reference policies and role arn that user API keys or STS AssumeRole credentials can be made for.
+Read, write and reference policies and roles that API keys or STS credentials can be made for.
 `
 
 const pathRolesHelpDesc = `
 This path allows you to read and write roles that are used to
-create user API keys or STS AssumeRole credentials.
+create API keys or STS credentials.
 
 If you supply a role ARN, that role must have been created to allow trusted actors,
-and the access key and secret that will be used to call STS AssumeRole (configured at
+and the secret id and key that will be used to call AssumeRole (configured at
 the /config path) must qualify as a trusted actor.
 
-If you supply policies, a user and API key will be dynamically created. The policies
-will be applied to that user.
+If you instead supply inline and/or remote policies to be applied, a user and API
+key will be dynamically created. The remote policies will be applied to that user,
+and the inline policies will also be dynamically created and applied.
 
-To obtain a user API key or STS AssumeRole credential after the role is created, if the
-backend is mounted at "tencentcloud" and you create a role at "tencentcloud/roles/my-role",
-then a user could request access credentials at "tencentcloud/creds/my-role".
+To obtain an API key or STS credential after the role is created, if the
+backend is mounted at "tencentcloud" and you create a role at "tencentcloud/roles/deploy",
+then a user could request access credentials at "tencentcloud/creds/deploy".
 
-To validate the keys, attempt to read an access key after writing the policy.
+To validate the keys, attempt to read an secret after writing the policy.
 `
