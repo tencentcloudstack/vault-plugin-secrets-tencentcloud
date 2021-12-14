@@ -1,47 +1,25 @@
-package vault_plugin_secrets_tencentcloud
+package tencentcloud
 
 import (
 	"context"
-	"net/http"
-	"os"
 	"strings"
 
-	"github.com/hashicorp/vault-plugin-secrets-tencentcloud/sdk"
+	"github.com/hashicorp/vault-plugin-secrets-tencentcloud/clients"
 	"github.com/hashicorp/vault/sdk/framework"
 	"github.com/hashicorp/vault/sdk/logical"
 )
 
-type backend struct {
-	*framework.Backend
-
-	transport http.RoundTripper
-}
-
+// Factory
 func Factory(ctx context.Context, conf *logical.BackendConfig) (logical.Backend, error) {
-	debug := conf.Logger.IsDebug()
-
-	if !debug {
-		env := strings.ToLower(os.Getenv("VAULT_LOG_LEVEL"))
-		debug = env == "trace" || env == "debug"
-	}
-
-	b := newBackend(&sdk.LogRoundTripper{
-		Debug: debug,
-	})
-
+	b := newBackend(clients.NewClientProfile())
 	if err := b.Setup(ctx, conf); err != nil {
 		return nil, err
 	}
-
 	return b, nil
 }
 
-// newBackend allows us to pass in the sdkConfig for testing purposes.
-func newBackend(transport http.RoundTripper) logical.Backend {
-	var b backend
-
-	b.transport = transport
-
+func newBackend(profile *clients.ClientProfile) *backend {
+	b := new(backend)
 	b.Backend = &framework.Backend{
 		Help: strings.TrimSpace(backendHelp),
 		PathsSpecial: &logical.Paths{
@@ -50,26 +28,31 @@ func newBackend(transport http.RoundTripper) logical.Backend {
 			},
 		},
 		Paths: []*framework.Path{
-			b.pathConfig(),
-			b.pathRole(),
-			b.pathListRoles(),
-			b.pathCreds(),
+			pathConfig(b),
+			pathRole(b),
+			pathListRoles(b),
+			pathCreds(b),
 		},
 		Secrets: []*framework.Secret{
-			b.pathSecrets(),
+			pathSecrets(b),
 		},
 		BackendType: logical.TypeLogical,
 	}
-
+	b.profile = profile
 	return b
 }
 
+type backend struct {
+	*framework.Backend
+	profile *clients.ClientProfile
+}
+
 const backendHelp = `
-The TencentCloud backend dynamically generates TencentCloud access keys for a set of
-CAM policies. The TencentCloud access keys have a configurable ttl set and are automatically
-revoked at the end of the ttl.
+The TencentCloud backend dynamically generates TencentCloud secret for a set of
+CAM policies. The TencentCloud secret have a configurable ttl set and
+are automatically revoked at the end of the ttl.
 
 After mounting this backend, credentials to generate CAM keys must
 be configured and roles must be written using
-the "roles/" endpoints before any access keys can be generated.
+the "role/" endpoints before any secret id can be generated.
 `

@@ -10,19 +10,20 @@ import (
 )
 
 func main() {
-	apiClientMeta := new(api.PluginAPIClientMeta)
+	apiClientMeta := &api.PluginAPIClientMeta{}
 	flags := apiClientMeta.FlagSet()
-	_ = flags.Parse(os.Args[1:])
+	flags.Parse(os.Args[1:])
 
 	tlsConfig := apiClientMeta.GetTLSConfig()
 	tlsProviderFunc := api.VaultPluginTLSProvider(tlsConfig)
 
-	if err := plugin.Serve(&plugin.ServeOpts{
+	err := plugin.Serve(&plugin.ServeOpts{
 		BackendFactoryFunc: tencentcloud.Factory,
 		TLSProviderFunc:    tlsProviderFunc,
-	}); err != nil {
-		logger := hclog.New(new(hclog.LoggerOptions))
+	})
 
+	if err != nil {
+		logger := hclog.New(&hclog.LoggerOptions{})
 		logger.Error("plugin shutting down", "error", err)
 		os.Exit(1)
 	}
