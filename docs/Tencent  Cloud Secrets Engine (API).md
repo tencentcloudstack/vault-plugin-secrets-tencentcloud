@@ -1,7 +1,7 @@
 
 # Tencent Cloud Secrets Engine (API)
 
-This is the API documentation for the Vault [Tencent Cloud secrets engine](/docs/secrets/tencentcloud).
+This is the API documentation for the Vault [Tencent Cloud secrets engine](https://github.com/tencentcloudstack/vault-plugin-secrets-tencentcloud/blob/master/docs/Tencent%20Cloud%20Secrets%20Engine.md).
 
 This documentation assumes the Tencent Cloud secrets engine is enabled at the `/tencentcloud` path
 in Vault. Since it is possible to enable secrets engines at any location, please
@@ -19,7 +19,7 @@ will use credentials in the following order:
 To use instance metadata, leave the static credential configuration unset.
 
 
-Please see the Vault [Tencent Cloud secret engine](/docs/secrets/tencentcloud) for
+Please see the Vault [Tencent Cloud secret engine](https://github.com/tencentcloudstack/vault-plugin-secrets-tencentcloud/blob/master/docs/Tencent%20Cloud%20Secrets%20Engine.md) for
 the policies that should be attached to the access key you provide.
 
 | Method | Path               |

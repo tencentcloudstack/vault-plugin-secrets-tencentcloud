@@ -5,7 +5,7 @@ Please note: We take Vault's security and our users' trust very seriously. If yo
 
 ## Quick Links
 - [Vault Website](https://www.vaultproject.io)
-- [Tencentcloud Secrets Docs](https://www.vaultproject.io/docs/secrets/tencentcloud/index.html)
+- [Tencentcloud Secrets Docs](https://github.com/tencentcloudstack/vault-plugin-secrets-tencentcloud/blob/master/docs/Tencent%20Cloud%20Secrets%20Engine.md)
 - [Vault Github](https://www.github.com/hashicorp/vault)
 - [General Announcement List](https://groups.google.com/forum/#!forum/hashicorp-announce)
 - [Discussion List](https://groups.google.com/forum/#!forum/vault-tool)
@@ -131,5 +131,5 @@ make test-acc
 
 ## Other Docs
 
-See up-to-date [docs](https://www.vaultproject.io/docs/secrets/tencentcloud/index.html)
-and general [API docs](https://www.vaultproject.io/api/secret/tencentcloud/index.html).
+See up-to-date [docs](https://github.com/tencentcloudstack/vault-plugin-secrets-tencentcloud/blob/master/docs/Tencent%20Cloud%20Secrets%20Engine.md)
+and general [API docs](https://github.com/tencentcloudstack/vault-plugin-secrets-tencentcloud/blob/master/docs/Tencent%20%20Cloud%20Secrets%20Engine%20(API).md).
