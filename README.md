@@ -17,14 +17,47 @@ and is meant to work with Vault. This guide assumes you have already installed V
 and have a basic understanding of how Vault works. Otherwise, first read this guide on
 how to [get started with Vault](https://www.vaultproject.io/intro/getting-started/install.html).
 
-If you are using Vault 1.9.0 or above, this plugin is packaged with Vault
-and by default can be enabled by running:
+### From Sources
+
+If you prefer to build the plugin from sources, clone the GitHub repository locally.
+
+### Build the plugin
+
+Build the secrets engine into a plugin using Go.
+```shell
+$ go build -o vault/plugins/vault-plugin-secrets-tencentcloud ./cmd/vault-plugin-secrets-tencentcloud/main.go
+```
+
+### Configuration
+
+Copy the plugin binary into a location of your choice; this directory must be specified as the [`plugin_directory`](https://www.vaultproject.io/docs/configuration#plugin_directory) in the Vault configuration file:
+
+```hcl
+plugin_directory = "vault/plugins"
+```
+
+Start a Vault server with this configuration file:
+
 ```sh
+$ vault server -config=vault/server.hcl
+```
 
-$ vault secrets enable tencentcloud
+Once the server is started, register the plugin in the Vault server's [plugin catalog](https://www.vaultproject.io/docs/internals/plugins#plugin-catalog):
 
-Success! Enabled the tencentcloud secrets engine at: tencentcloud/
- 
+```sh
+$ SHA256=$(shasum -a 256 vault/plugins/vault-plugin-secrets-tencentcloud | cut -d ' ' -f1)
+
+$ vault plugin register -sha256=$SHA256 secret vault-plugin-secrets-tencentcloud
+
+$ vault plugin info secret vault-plugin-secrets-tencentcloud
+
+```
+
+You can now enable the TencentCloud secrets plugin:
+
+```sh
+$ vault secrets enable -path=tencentcloud vault-plugin-secrets-tencentcloud
+Success! Enabled the vault-plugin-secrets-tencentcloud secrets engine at: tencentcloud/
 ```
 
 If you are testing this plugin in an earlier version of Vault or
