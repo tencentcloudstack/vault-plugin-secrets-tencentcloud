@@ -1,8 +1,6 @@
 # Vault Plugin: TencentCloud Platform Secrets Backend
 This is a backend plugin to be used with Hashicorp Vault. This plugin generates unique, ephemeral user API keys and STS AssumeRole credentials.
 
-Please note: We take Vault's security and our users' trust very seriously. If you believe you have found a security issue in Vault or with this plugin, please responsibly disclose by contacting us at security@hashicorp.com.
-
 ## Quick Links
 - [Vault Website](https://www.vaultproject.io)
 - [Tencentcloud Secrets Docs](https://github.com/tencentcloudstack/vault-plugin-secrets-tencentcloud/blob/master/docs/Tencent%20Cloud%20Secrets%20Engine.md)
