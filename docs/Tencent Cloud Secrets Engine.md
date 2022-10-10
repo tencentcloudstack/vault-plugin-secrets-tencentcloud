@@ -150,7 +150,7 @@ Retrieving creds for a role using a `role_arn` will carry the additional
 fields of `expiration` and `security_token`, like so:
 
 ```shell
-    $ vault read alicloud/creds/role-based
+    $ vault read tencentcloud/creds/role-based
     Key                Value
     ---                -----
     lease_id           tencentcloud/creds/hastrustedactors/lZw7hW3jfscsYKYVvp7m7ERx
