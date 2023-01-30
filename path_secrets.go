@@ -131,10 +131,7 @@ func (b *backend) operationRevoke(ctx context.Context,
 		if err := client.DeleteAccessKey(&secret_id, &uinInt); err != nil {
 			apiErrs = multierror.Append(apiErrs, err)
 		}
-		inlinePolicies, err := getRemotePolicies(req.Secret.InternalData, "inline_policies")
-		if err != nil {
-			return nil, err
-		}
+		inlinePolicies, _ := getRemotePolicies(req.Secret.InternalData, "inline_policies")
 		for _, inlinePolicy := range inlinePolicies {
 			if err := client.DetachUserPolicy(&(inlinePolicy.PolicyId), &uinInt); err != nil {
 				apiErrs = multierror.Append(apiErrs, err)
@@ -144,9 +141,6 @@ func (b *backend) operationRevoke(ctx context.Context,
 			}
 		}
 		remotePolicies, err := getRemotePolicies(req.Secret.InternalData, "remote_policies")
-		if err != nil {
-			return nil, err
-		}
 		for _, remotePolicy := range remotePolicies {
 			policyId, err := getPolicyIdByRemotePol(remotePolicy, client)
 			if err != nil {
