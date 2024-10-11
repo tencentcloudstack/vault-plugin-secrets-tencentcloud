@@ -28,6 +28,12 @@ func pathCreds(b *backend) *framework.Path {
 				Type:        framework.TypeLowerCaseString,
 				Description: "The name of the role.",
 			},
+			"external_id": {
+				Type: framework.TypeString,
+				Description: `The external ID is a string of characters that you define for this role. To use this role, a user needs to pass in this external ID as you set.
+This improves the security of role assuming by preventing unauthorized use of the role when the role information is leaked or guessed.
+You're advised to enable external ID verification if you will allow a third-party platform to use the role to be created, or if the account and role information is easily accessible by other users.`,
+			},
 		},
 		Operations: map[logical.Operation]framework.OperationHandler{
 			logical.ReadOperation: &framework.PathOperation{
@@ -62,12 +68,12 @@ func checkData(roleName string, ctx context.Context, req *logical.Request) (
 }
 
 func (b *backend) roleTypeSTSFunc(creds *credConfig, req *logical.Request,
-	role *roleEntry, roleName string) (*logical.Response, error) {
+	role *roleEntry, roleName, externalId string) (*logical.Response, error) {
 	client, err := clients.NewSTSClient(b.profile, creds.SecretId, creds.SecretKey)
 	if err != nil {
 		return nil, err
 	}
-	assumeRoleResp, err := client.AssumeRole(generateRoleSessionName(req.DisplayName, roleName), role.RoleARN)
+	assumeRoleResp, err := client.AssumeRole(generateRoleSessionName(req.DisplayName, roleName), role.RoleARN, externalId)
 	if err != nil {
 		return nil, err
 	}
@@ -134,13 +140,17 @@ func inlinePolicyFunc(createUserResp *cam.AddUserResponse,
 func (b *backend) pathCredsRead(ctx context.Context,
 	req *logical.Request, data *framework.FieldData) (*logical.Response, error) {
 	roleName := data.Get("name").(string)
+	externalId := ""
+	if raw, ok := data.GetOk("external_id"); ok {
+		externalId = raw.(string)
+	}
 	role, creds, err := checkData(roleName, ctx, req)
 	if err != nil {
 		return nil, err
 	}
 	switch role.Type() {
 	case roleTypeSTS:
-		return b.roleTypeSTSFunc(creds, req, role, roleName)
+		return b.roleTypeSTSFunc(creds, req, role, roleName, externalId)
 	case roleTypeCAM:
 		b.profile.HttpProfile.ReqTimeout = 600
 		client, err := clients.NewCAMClient(b.profile, creds.SecretId, creds.SecretKey)

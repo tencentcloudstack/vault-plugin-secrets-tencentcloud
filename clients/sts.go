@@ -28,9 +28,10 @@ type STSClient struct {
 }
 
 // AssumeRole
-func (c *STSClient) AssumeRole(roleSessionName, roleARN string) (*sts.AssumeRoleResponse, error) {
+func (c *STSClient) AssumeRole(roleSessionName, roleARN, externalId string) (*sts.AssumeRoleResponse, error) {
 	assumeRoleReq := sts.NewAssumeRoleRequest()
 	assumeRoleReq.RoleSessionName = &roleSessionName
 	assumeRoleReq.RoleArn = &roleARN
+	assumeRoleReq.ExternalId = &externalId
 	return c.client.AssumeRole(assumeRoleReq)
 }
