@@ -9,9 +9,9 @@ import (
 )
 
 /*
-	testEnv allows us to reuse the same requests and response-checking
-	for both integration tests that don't hit TencentCloud's real API, and
-	for acceptance tests that do hit their real API.
+testEnv allows us to reuse the same requests and response-checking
+for both integration tests that don't hit TencentCloud's real API, and
+for acceptance tests that do hit their real API.
 */
 type testEnv struct {
 	SecretId  string
@@ -62,7 +62,7 @@ func (e *testEnv) ReadFirstConfig(t *testing.T) {
 	if resp.Data["secret_id"] != e.SecretId {
 		t.Fatal("expected secret_id of " + e.SecretId)
 	}
-	if resp.Data["secret_key"] != e.SecretKey {
+	if _, ok := resp.Data["secret_key"]; ok {
 		t.Fatal("secret_key should not be returned")
 	}
 }
@@ -104,8 +104,8 @@ func (e *testEnv) ReadSecondConfig(t *testing.T) {
 	if resp.Data["secret_id"] != "foo" {
 		t.Fatal("expected secret_id of foo")
 	}
-	if resp.Data["secret_key"] != "bar" {
-		t.Fatal("expected secret_key of bar")
+	if _, ok := resp.Data["secret_key"]; ok {
+		t.Fatal("secret_key should not be returned")
 	}
 }
 

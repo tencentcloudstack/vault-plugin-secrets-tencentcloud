@@ -89,8 +89,7 @@ func (b *backend) pathConfigRead(ctx context.Context,
 	}
 	return &logical.Response{
 		Data: map[string]interface{}{
-			secretId:  creds.SecretId,
-			secretKey: creds.SecretKey,
+			secretId: creds.SecretId,
 		},
 	}, nil
 }

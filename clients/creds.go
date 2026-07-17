@@ -8,9 +8,9 @@ import (
 
 func chainedCreds(secretId, secretKey string) (common.CredentialIface, error) {
 	providerChain := []common.Provider{
+		NewConfigurationCredentialProvider(&Configuration{secretId, secretKey}),
 		common.DefaultEnvProvider(),
 		common.DefaultProfileProvider(),
-		NewConfigurationCredentialProvider(&Configuration{secretId, secretKey}),
 		common.DefaultCvmRoleProvider(),
 	}
 	return common.NewProviderChain(providerChain).GetCredential()
