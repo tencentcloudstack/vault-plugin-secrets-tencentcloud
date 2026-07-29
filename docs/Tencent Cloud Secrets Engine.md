@@ -65,8 +65,8 @@ Most secrets engines must be configured in advance before they can perform their
 
     ```shell
     $ vault write tencentcloud/config \
-        secret_id="AKIDa0A4h4AXXXXXXXX31jBMGtFLAj14rO" \
-        secret_key="HI1TCj25sPhjXXXXXXXXXXXX4ZnmVx95" 
+        secret_id="AKIDa0*******j14rO" \
+        secret_key="HI1TCj*******Vx95" 
     ```
 
     Alternatively, the Tencent Cloud secrets engine can pick up credentials set as environment variables,
@@ -157,9 +157,9 @@ fields of `expiration` and `security_token`, like so:
     lease_duration     1h59m59s
     lease_renewable    false
     expiration         2021-12-07T09:12:46Z
-    secret_id          AKIDHW6K0TXXkZr_XkXXXXXXXXXXXX6ZJQ6khu9danZucl_4HyjHk04UDOw9DSN
-    secret_key         yEbUKHizYzTNyaV832P6wnmVU0zmtEyd+TIsvQEBtsM=
-    token              eEAZmzBApPoUIgjxgQGxS9SxDZoo298a665df05508487d66cc34068694a84defXaUtsypDE3IZvju0N7u2ZV9i3K8u4zfOMZLth7G8kkuQS2bl7ICpxOQdmSy10m3vkCyh_ktiG0IQL2-zH8i3icZyc71kCl2ojC7BsKZEmQBv2sUAu9VFOP5e5FF21VIQpPnAUGGjNx3Cjj7c-LcA2OU8d8R0dpr1qJpGu-QtV_PX5Fbs2JwD4ZmxTU5RrryA3D9mpBQ3ux4osGAV7bPoJTPeavNEqrgw0_D_CneCHoiM5ybjAIYGJpIRiHrQINVqOU-rWIvmQPwq3Quc17jufZy388WDAOAkJggXKvCuotOrBTmZAPGhpjmsaL3km1gQSIrTcEhxT-rYBANJ0ieMsc2XSfriK4dEwHDfoz5MW6qKrRAycC-hLbR1YipWUDTiCFfsr51fIF1UrJxdQf3CaQ
+    secret_id          AKIDHW*******9DSN
+    secret_key         yEbUKH*******BtsM=
+    token              eEAZmzBApPoUIgjxgQGZv**************************UDTiCFfsr51fIF1UrJxdQf3CaQ
 ```
 
 ### Example CAM Policy for Vault

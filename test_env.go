@@ -62,6 +62,9 @@ func (e *testEnv) ReadFirstConfig(t *testing.T) {
 	if resp.Data["secret_id"] != e.SecretId {
 		t.Fatal("expected secret_id of " + e.SecretId)
 	}
+	if resp.Data["secret_key_set"] != true {
+		t.Fatal("expected secret_key_set to be true")
+	}
 	if _, ok := resp.Data["secret_key"]; ok {
 		t.Fatal("secret_key should not be returned")
 	}
@@ -103,6 +106,9 @@ func (e *testEnv) ReadSecondConfig(t *testing.T) {
 	}
 	if resp.Data["secret_id"] != "foo" {
 		t.Fatal("expected secret_id of foo")
+	}
+	if resp.Data["secret_key_set"] != true {
+		t.Fatal("expected secret_key_set to be true")
 	}
 	if _, ok := resp.Data["secret_key"]; ok {
 		t.Fatal("secret_key should not be returned")

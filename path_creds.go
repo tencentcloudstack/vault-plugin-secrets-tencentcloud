@@ -3,10 +3,10 @@ package tencentcloud
 import (
 	"container/list"
 	"context"
+	"crypto/rand"
 	"fmt"
 	camLocal "github.com/hashicorp/vault-plugin-secrets-tencentcloud/sdk/tencentcloud/cam/v20190116"
 	cam "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/cam/v20190116"
-	"math/rand"
 	"time"
 
 	"github.com/hashicorp/vault-plugin-secrets-tencentcloud/clients"
@@ -254,11 +254,17 @@ func generateRoleSessionName(displayName, roleName string) string {
 
 func generateName(displayName, roleName string, maxLength int) string {
 	name := fmt.Sprintf("%s-%s-", displayName, roleName)
-	if len(name) > maxLength-15 {
-		name = name[:maxLength-15]
+	b := make([]byte, 2)
+	rand.Read(b)
+	suffix := fmt.Sprintf("%d-%x", time.Now().Unix(), b)
+	prefixMaxLength := maxLength - len(suffix)
+	if prefixMaxLength < 0 {
+		prefixMaxLength = 0
 	}
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	return fmt.Sprintf("%s%d-%d", name, time.Now().Unix(), r.Intn(10000))
+	if len(name) > prefixMaxLength {
+		name = name[:prefixMaxLength]
+	}
+	return fmt.Sprintf("%s%s", name, suffix)
 }
 
 const pathCredsHelpSyn = `

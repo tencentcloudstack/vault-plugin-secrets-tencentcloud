@@ -149,8 +149,8 @@ $ make test
   and set your CAM role arn via `TENCENTCLOUD_ARN` environment variables
 
 ```sh
-export TENCENTCLOUD_SECRET_ID=AKID12l4j5ljqatgaljgalg
-export TENCENTCLOUD_SECRET_KEY=alkfj23lkraljq5lj532lr32l4
+export TENCENTCLOUD_SECRET_ID=AKID12****galg
+export TENCENTCLOUD_SECRET_KEY=alkfj23****32l4
 export TENCENTCLOUD_ROLE_ARN=qcs::cam::uin/12345678:roleName/test
 ```
 

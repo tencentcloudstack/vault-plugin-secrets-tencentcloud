@@ -12,6 +12,7 @@ const (
 	configStoragePath = "config"
 	secretId          = "secret_id"
 	secretKey         = "secret_key"
+	secretKeySet      = "secret_key_set"
 )
 
 type credConfig struct {
@@ -89,7 +90,8 @@ func (b *backend) pathConfigRead(ctx context.Context,
 	}
 	return &logical.Response{
 		Data: map[string]interface{}{
-			secretId: creds.SecretId,
+			secretId:     creds.SecretId,
+			secretKeySet: creds.SecretKey != "",
 		},
 	}, nil
 }

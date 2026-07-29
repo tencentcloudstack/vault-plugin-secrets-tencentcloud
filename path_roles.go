@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -155,6 +156,9 @@ func roleInlinePolicies(policyDocsStr string, role *roleEntry) (err error) {
 	}
 	role.InlinePolicies = make([]*inlinePolicy, len(policyDocs))
 	for i, policyDoc := range policyDocs {
+		if err = validatePolicyDocument(policyDoc); err != nil {
+			return err
+		}
 		uid, err := uuid.GenerateUUID()
 		if err != nil {
 			return err
@@ -164,6 +168,44 @@ func roleInlinePolicies(policyDocsStr string, role *roleEntry) (err error) {
 			UUID:           uid,
 			PolicyDocument: policyDoc,
 		}
+	}
+	return nil
+}
+
+func validatePolicyDocument(doc map[string]interface{}) error {
+	statements, ok := doc["statement"].([]interface{})
+	if !ok {
+		return fmt.Errorf("invalid policy: missing statement array")
+	}
+	for _, stmt := range statements {
+		s, ok := stmt.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		// 仅拦截裸 * 的 action（如 action:["*"]），这是管理员级权限提升风险。
+		// resource:["*"] 配合具体 action 前缀（如 cos:*）是 CAM 标准用法，允许。
+		values, ok := s["action"].([]interface{})
+		if !ok {
+			continue
+		}
+		for _, v := range values {
+			if v == "*" {
+				return fmt.Errorf("wildcard action '*' not allowed")
+			}
+		}
+	}
+	return nil
+}
+
+var arnPattern = regexp.MustCompile(`^qcs::cam::uin/(\d+):roleName/(.+)$`)
+
+func validateRoleARN(arn string, expectedUin string) error {
+	matches := arnPattern.FindStringSubmatch(arn)
+	if matches == nil {
+		return fmt.Errorf("invalid ARN format: expected qcs::cam::uin/{uin}:roleName/{name}")
+	}
+	if expectedUin != "" && matches[1] != expectedUin {
+		return fmt.Errorf("cross-account ARN not allowed: got uin %s, expected %s", matches[1], expectedUin)
 	}
 	return nil
 }
@@ -215,6 +257,9 @@ func (b *backend) pathRoleWrite(ctx context.Context,
 	}
 	if raw, ok := data.GetOk("role_arn"); ok {
 		role.RoleARN = raw.(string)
+		if err = validateRoleARN(role.RoleARN, ""); err != nil {
+			return nil, err
+		}
 	}
 	if raw, ok := data.GetOk("inline_policies"); ok {
 		policyDocsStr := raw.(string)

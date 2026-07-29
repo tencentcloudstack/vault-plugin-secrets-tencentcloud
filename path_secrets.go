@@ -141,13 +141,20 @@ func (b *backend) operationRevoke(ctx context.Context,
 			}
 		}
 		remotePolicies, err := getRemotePolicies(req.Secret.InternalData, "remote_policies")
-		for _, remotePolicy := range remotePolicies {
-			policyId, err := getPolicyIdByRemotePol(remotePolicy, client)
-			if err != nil {
-				return nil, err
-			}
-			if err := client.DetachUserPolicy(policyId, &uinInt); err != nil {
-				apiErrs = multierror.Append(apiErrs, err)
+		if err != nil {
+			apiErrs = multierror.Append(apiErrs, fmt.Errorf("failed to get remote policies: %w", err))
+		} else {
+			for _, remotePolicy := range remotePolicies {
+				policyId, err := getPolicyIdByRemotePol(remotePolicy, client)
+				if err != nil {
+					apiErrs = multierror.Append(apiErrs,
+						fmt.Errorf("failed to get policy ID for %s (scope=%s): %w",
+							remotePolicy.PolicyName, remotePolicy.Scope, err))
+					continue
+				}
+				if err := client.DetachUserPolicy(policyId, &uinInt); err != nil {
+					apiErrs = multierror.Append(apiErrs, err)
+				}
 			}
 		}
 		if err := client.DeleteUser(&userName); err != nil {

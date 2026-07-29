@@ -1,6 +1,6 @@
 module github.com/hashicorp/vault-plugin-secrets-tencentcloud
 
-go 1.25.8
+go 1.25.12
 
 require (
 	github.com/hashicorp/go-hclog v1.6.3
